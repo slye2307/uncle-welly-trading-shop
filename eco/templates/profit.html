@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+<head>
+  {% extends "base.html" %}
+  {% block content %}
+  <title>Profit Report</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    table { width: 80%; margin: auto; border-collapse: collapse; }
+    table, th, td { border: 1px solid #9ac4f1; padding: 8px; text-align: center;}
+    th{background:#2875da}
+  </style>
+</head>
+<body>
+  <h1 style="text-align:center;">Profit Report</h1>
+
+  <form method="get" action="{{ url_for('profit_report') }}" style="text-align:center">
+    <label>Start: <input type="date" name="start" value="{{ start }}"></label>
+    <label>End: <input type="date" name="end" value="{{ end }}"></label>
+    <button type="submit">Filter</button>
+    <a href="{{ url_for('export_csv', which='sales') }}">Export Sales CSV</a>
+  </form>
+
+  <canvas id="profitChart" width="800" height="250" style="display:block; margin:20px auto;"></canvas>
+
+  <table>
+    <tr>
+      <th>Item</th><th>Quantity Sold</th><th>Unit</th><th>Cost Price</th><th>Selling Price</th><th>Profit/unit</th><th>Total Profit</th>
+    </tr>
+    {% for item in profit_data %}
+    <tr>
+      <td>{{ item.name }}</td>
+      <td>{{ item.quantity }}</td>
+      <td>{{ item.unit }}</td>
+      <td>{{ item.cost_price }}</td>
+      <td>{{ item.selling_price }}</td>
+      <td>{{ item.profit_per_unit }}</td>
+      <td>{{ item.total_item_profit }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <h2 style="text-align:center;">Overall Total Profit: {{ total_profit }}</h2>
+
+<script>
+const labels = {{ chart_labels|tojson | safe }};
+const data = {{ chart_data|tojson | safe }};
+const ctx = document.getElementById('profitChart').getContext('2d');
+new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels: labels,
+    datasets: [{
+      label: 'Profit by day',
+      data: data,
+      borderColor: 'rgba(75, 192, 192, 1)',
+      backgroundColor: 'rgba(75, 176, 200, 3)',
+      tension: 0.2
+    }]
+  },
+  options: {
+    scales: { y: { beginAtZero: true } }
+  }
+});
+</script>
+
+  <p style="text-align:center;"><a href="{{ url_for('index') }}">Back</a></p>
+  {% endblock %}
+</body>
+</html>

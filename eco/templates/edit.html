@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Edit Item</title>
+</head>
+<body>
+    {% extends "base.html" %}
+    {% block content %}
+    <h1>Edit Item</h1>
+    <form method="post">
+        <label>Name:</label>
+        <input type="text" name="name" value="{{ item['name'] }}" required><br>
+
+        <label>Quantity:</label>
+        <input type="number" step="0.01" name="quantity" value="{{ item['quantity'] }}" required><br>
+
+        <label>Unit:</label>
+        <input type="text" name="unit" value="{{ item['unit'] }}" required><br>
+
+        <label>Cost Price:</label>
+        <input type="number" step="0.01" name="cost_price" value="{{ item['cost_price'] }}" required><br>
+
+        <label>Selling Price:</label>
+        <input type="number" step="0.01" name="selling_price" value="{{ item['selling_price'] }}" required><br>
+
+        <button type="submit">Save</button>
+    </form>
+    <a href="{{ url_for('index') }}">Back to Inventory</a>
+    {% endblock %}
+</body>
+</html>

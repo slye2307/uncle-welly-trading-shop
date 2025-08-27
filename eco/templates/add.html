@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Add Item</title>
+</head>
+<body>
+    {% extends "base.html" %}
+    {% block content %}
+    <h1>Add New Stock Item</h1>
+    <form method="POST">
+        <label>Item Name:</label><br>
+        <input type="text" name="name"><br>
+        <label>Quantity:</label><br>
+        <input type="number" name="quantity"><br>
+        <label>Unit:</label><br>
+    <select name="unit" required>
+        <option value="kg">Kg</option>
+        <option value="liters">Liters</option>
+        <option value="packs">Packs</option>
+        <option value="pieces">Pieces</option>
+    </select><br><br>
+        <label>Cost Price:</label><br>
+        <input type="number" step="0.01" name="cost_price"><br>
+        <label for="low_stock_threshold">Low Stock Threshold</label><br>
+        <input type="number" id="low_stock_threshold" name="low_stock_threshold" value="5"><br>
+        <label>Selling Price:</label><br>
+        <input type="number" step="0.01" name="selling_price"><br>
+        <button type="submit">Add</button><br>
+    </form>
+    {% endblock %}
+</body>
+</html>
