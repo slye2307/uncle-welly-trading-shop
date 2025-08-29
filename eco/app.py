@@ -1,5 +1,5 @@
 # app.py
-from flask import Flask, flash, render_template, request, redirect, url_for
+from flask import Flask, flash, render_template, request, redirect, url_for, session
 import sqlite3
 import os
 from flask import Response
@@ -10,6 +10,8 @@ import json
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'
+USERNAME = 'admin'
+PASSWORD = 'password'
 
 DATABASE = 'database/stock.db'
 
@@ -18,12 +20,153 @@ def get_db_connection():
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
     return conn
-DATABASE = 'database/stock.db'  # ✅ Use the same DB as init_db.py
 
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+
+        if username == USERNAME and password == PASSWORD:
+            session['user'] = username
+            flash("Login successful!", "success")
+            return redirect(url_for('index'))
+        else:
+            flash("Invalid username or password", "danger")
+            return redirect(url_for('login'))
+
+    return '''
+        <form method="POST">
+            Username: <input type="text" name="username"><br>
+            Password: <input type="password" name="password"><br>
+            <input type="submit" value="Login">
+        </form>
+    '''
+
+
+@app.route('/logout')
+def logout():
+    session.pop('user', None) 
+    flash("You have been logged out.", "info")
+    return redirect(url_for('login'))
+
+
+
+@app.route('/')
+def index():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+
+    name = request.args.get('name', '')
+    unit = request.args.get('unit', '')
+    min_price = request.args.get('min_price', '')
+    max_price = request.args.get('max_price', '')
+
+    query = 'SELECT * FROM stock WHERE 1=1'
+    params = []
+
+    if name:
+        query += ' AND name LIKE ?'
+        params.append(f"%{name}%")
+    if unit:
+        query += ' AND unit = ?'# app.py
+from flask import Flask, flash, render_template, request, redirect, url_for, session, Response
+import sqlite3
+import os
+from datetime import datetime
+import csv
+import io
+import json
+
+app = Flask(__name__)
+app.secret_key = 'your_secret_key_here'
+
+# Hardcoded demo credentials
+USERNAME = 'admin'
+PASSWORD = 'password'
+
+DATABASE = 'database/stock.db'
+
+
+def get_db_connection():
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+# ------------------ LOGIN ------------------
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+
+        if username == USERNAME and password == PASSWORD:
+            session['user'] = username
+            flash("Login successful!", "success")
+            return redirect(url_for('index'))
+        else:
+            flash("Invalid username or password", "danger")
+            return redirect(url_for('login'))
+
+    return '''
+        <h2>Login</h2>
+        <form method="POST">
+            Username: <input type="text" name="username"><br>
+            Password: <input type="password" name="password"><br>
+            <input type="submit" value="Login">
+        </form>
+    '''
+
+
+@app.route('/logout')
+def logout():
+    session.pop('user', None)  # remove user session
+    flash("You have been logged out.", "info")
+    return redirect(url_for('login'))
+
+
+# ------------------ EXISTING ROUTES ------------------
+
+@app.route('/')
+def index():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+
+    name = request.args.get('name', '')
+    unit = request.args.get('unit', '')
+    min_price = request.args.get('min_price', '')
+    max_price = request.args.get('max_price', '')
+
+    query = 'SELECT * FROM stock WHERE 1=1'
+    params = []
+
+    if name:
+        query += ' AND name LIKE ?'
+        params.append(f"%{name}%")
+    if unit:
+        query += ' AND unit = ?'
+        params.append(unit)
+    if min_price:
+        query += ' AND selling_price >= ?'
+        params.append(min_price)
+    if max_price:
+        query += ' AND selling_price <= ?'
+        params.append(max_price)
+
+    conn = get_db_connection()
+    items = conn.execute(query, params).fetchall()
+    conn.close()
+
+    return render_template('index.html', items=items)
 
 
 @app.route('/sell/<int:id>', methods=['GET', 'POST'])
 def sell_item(id):
+    if 'user' not in session:
+        return redirect(url_for('login'))
+
     conn = get_db_connection()
     item = conn.execute('SELECT * FROM stock WHERE id = ?', (id,)).fetchone()  # ✅ Fetch from stock
 
@@ -74,39 +217,11 @@ def sell_item(id):
     return render_template('sell.html', item=item)
 
 
-
-@app.route('/')
-def index():
-    name = request.args.get('name', '')
-    unit = request.args.get('unit', '')
-    min_price = request.args.get('min_price', '')
-    max_price = request.args.get('max_price', '')
-
-    query = 'SELECT * FROM stock WHERE 1=1'
-    params = []
-
-    if name:
-        query += ' AND name LIKE ?'
-        params.append(f"%{name}%")
-    if unit:
-        query += ' AND unit = ?'
-        params.append(unit)
-    if min_price:
-        query += ' AND selling_price >= ?'
-        params.append(min_price)
-    if max_price:
-        query += ' AND selling_price <= ?'
-        params.append(max_price)
-
-    conn = get_db_connection()
-    items = conn.execute(query, params).fetchall()
-    conn.close()
-
-    return render_template('index.html', items=items)
-
-
 @app.route('/add', methods=('GET', 'POST'))
 def add_item():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+
     if request.method == 'POST':
         name = request.form['name']
         quantity = int(request.form['quantity'])
@@ -129,6 +244,9 @@ def add_item():
 
 @app.route('/edit/<int:id>', methods=('GET', 'POST'))
 def edit_item(id):
+    if 'user' not in session:
+        return redirect(url_for('login'))
+
     conn = get_db_connection()
     item = conn.execute('SELECT * FROM stock WHERE id = ?', (id,)).fetchone()
 
@@ -158,14 +276,21 @@ def edit_item(id):
 
 @app.route('/delete/<int:id>', methods=('POST',))
 def delete_item(id):
+    if 'user' not in session:
+        return redirect(url_for('login'))
+
     conn = get_db_connection()
     conn.execute('DELETE FROM stock WHERE id = ?', (id,))
     conn.commit()
     conn.close()
     return redirect(url_for('index'))
 
+
 @app.route('/profit-report')
 def profit_report():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+
     conn = sqlite3.connect('database/stock.db')
     conn.row_factory = sqlite3.Row  # ✅ Makes rows act like dictionaries
     cursor = conn.cursor()
@@ -200,13 +325,12 @@ def profit_report():
         chart_labels=chart_labels or [],
         chart_data=chart_data or [])
 
-@app.route('/logout')
-def logout():
-    # Here you would typically handle user session termination
-    return redirect(url_for('index')) 
 
 @app.route('/sales')
 def sales_history():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+
     conn = get_db_connection()
     rows = conn.execute('''
         SELECT sales.id,
@@ -228,6 +352,9 @@ def sales_history():
 # LOW STOCK PAGE
 @app.route('/low-stock')
 def low_stock():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+
     conn = get_db_connection()
     rows = conn.execute('''
         SELECT * FROM stock
@@ -237,8 +364,12 @@ def low_stock():
     conn.close()
     return render_template('low_stock.html', items=rows)
 
+
 @app.route('/export/sales')
 def export_csv():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+
     conn = get_db_connection()
     rows = conn.execute('''
         SELECT 
@@ -280,3 +411,16 @@ if __name__ == '__main__':
         os.makedirs('database')
     app.run(debug=True)
 
+        params.append(unit)
+    if min_price:
+        query += ' AND selling_price >= ?'
+        params.append(min_price)
+    if max_price:
+        query += ' AND selling_price <= ?'
+        params.append(max_price)
+
+    conn = get_db_connection()
+    items = conn.execute(query, params).fetchall()
+    conn.close()
+
+    return render_template('index.html', items=items)
