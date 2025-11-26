@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+<head>
+  {% extends "base.html" %}
+  {% block content %}
+  <title>Low Stock Items</title>
+  <style>.low {background:#ffdddd;padding:6px}</style>
+</head>
+<body>
+  <h1>Low Stock</h1>
+  <table border="1" cellpadding="6">
+    <tr><th>Name</th><th>Quantity</th><th>Unit</th><th>Threshold</th><th>Action</th></tr>
+    {% for it in items %}
+    <tr class="low">
+      <td>{{ it.name }}</td>
+      <td>{{ it.quantity }}</td>
+      <td>{{ it.unit }}</td>
+      <td>{{ it.low_stock_threshold }}</td>
+      <td><a href="{{ url_for('edit_item', id=it.id) }}">Edit / Reorder</a></td>
+    </tr>
+    {% endfor %}
+  </table>
+  <a href="{{ url_for('index') }}">Back</a>
+  {% endblock %}
+</body>
+</html>

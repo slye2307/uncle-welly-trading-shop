@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Sell Item</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin-top: 50px;
+        }
+        form {
+            display: inline-block;
+            text-align: left;
+        }
+        label, input, button {
+            display: block;
+            margin: 10px 0;
+        }
+        input {
+            padding: 5px;
+            width: 100%;
+        }
+        button {
+            padding: 8px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    {% extends "base.html" %}
+    {% block content %}
+    <h1>Sell Item</h1>
+    <p><strong>{{ item['name'] }}</strong> — {{ item['quantity'] }} {{ item['unit'] }} in stock</p>
+
+    <form method="POST">
+        <label for="quantity_sold">Quantity to sell:</label>
+        <input type="number" name="quantity_sold" min="1" max="{{ item['quantity'] }}" required>
+
+        <button type="submit">Sell</button>
+    </form>
+
+    <br><br>
+    <a href="{{ url_for('index') }}">Back to Stock</a>
+    {% endblock %}
+</body>
+</html>

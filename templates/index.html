@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block content %}
+<!DOCTYPE html>
+<html>
+<head>
+    
+    <title>Sustainable Dashboard</title>
+    <style>
+        .low-stock {
+            background-color: #ffcccc;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <form method="GET" action="/">
+        <input type="text" name="name" placeholder="Search by name" value="{{ request.args.get('name', '') }}">
+        <select name="unit">
+            <option value="">All units</option>
+            <option value="kg" {% if request.args.get('unit') == 'kg' %}selected{% endif %}>kg</option>
+            <option value="liter" {% if request.args.get('unit') == 'liter' %}selected{% endif %}>liter</option>
+            <option value="pcs" {% if request.args.get('unit') == 'pcs' %}selected{% endif %}>pcs</option>
+        </select>
+        <input type="number" name="min_price" placeholder="Min price" step="0.01" value="{{ request.args.get('min_price', '') }}">
+        <input type="number" name="max_price" placeholder="Max price" step="0.01" value="{{ request.args.get('max_price', '') }}">
+        <button type="submit">Search</button>
+    </form>
+    <hr>
+
+    <h1>Current Stock</h1>
+    <br><a href="{{ url_for('add_item') }}">Add New Item</a></br>
+    <br><a href="{{ url_for('profit_report') }}">View Profit & Loss</a></br>
+    <br><a href="{{ url_for('logout') }}">Logout</a></br>
+    
+
+    <br>
+    <table border="1" cellpadding="5">
+        <tr>
+            <th>Name</th>
+            <th>Quantity</th>
+            <th>Cost Price</th>
+            <th>Selling Price</th>
+            <th>Alert</th>
+            <th>Actions</th>
+        </tr>
+        {% for item in items %}
+        <tr {% if item.quantity <= item.low_stock_threshold %}class="low-stock"{% endif %}>
+            <td>{{ item.name }}</td>
+            <td>{{ item.quantity }} {{ item.unit }}</td>
+            <td>{{ item.cost_price }}</td>
+            <td>{{ item.selling_price }}</td>
+            <td>
+                {% if item.quantity <= item.low_stock_threshold %}
+                    Low Stock!
+                {% endif %}
+            </td>
+            <td>
+                <a href="{{ url_for('edit_item', id=item.id) }}">Edit</a>
+                <a href="{{ url_for('sell_item', id=item.id) }}" class="btn btn-success btn-sm">Sell</a>
+                <form action="{{ url_for('delete_item', id=item.id) }}" method="post" style="display:inline;">
+                    <button type="submit" onclick="return confirm('Are you sure?');">Delete</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+    </br>
+    <a href="{{ url_for('low_stock') }}">View Low Stock Items</a> |
+    <a href="{{ url_for('sales_history') }}">View Sales History</a>
+    
+</body>
+</html>
+{% endblock %}

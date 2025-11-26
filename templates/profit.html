@@ -1,0 +1,595 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="profit-report">
+  <div class="report-bar">
+    <div>
+      <p class="eyebrow">Intelligence</p>
+      <h1 class="profit-report__title">Profit Report</h1>
+    </div>
+    <button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle theme">
+      <i class="fas fa-moon"></i>
+    </button>
+  </div>
+
+  <form class="profit-report__filters" method="get" action="{{ url_for('profit_report') }}">
+    <label>
+      <span>Start</span>
+      <input type="date" name="start" value="{{ start }}">
+    </label>
+    <label>
+      <span>End</span>
+      <input type="date" name="end" value="{{ end }}">
+    </label>
+    <button type="submit">Apply</button>
+    <a class="link-button" href="{{ url_for('export_csv', which='sales') }}">Export Sales CSV</a>
+  </form>
+
+  <div class="hero-strip">
+    <article class="hero-card">
+      <div class="hero-icon positive"><i class="fas fa-chart-line"></i></div>
+      <div>
+        <p>Total Profit</p>
+        <strong>{{ "{:,.2f}".format(summary.total_profit) }}</strong>
+      </div>
+    </article>
+    <article class="hero-card">
+      <div class="hero-icon neutral"><i class="fas fa-boxes-stacked"></i></div>
+      <div>
+        <p>Units Sold</p>
+        <strong>{{ "{:,.2f}".format(summary.total_units_sold) }}</strong>
+      </div>
+    </article>
+    <article class="hero-card">
+      <div class="hero-icon info"><i class="fas fa-layer-group"></i></div>
+      <div>
+        <p>Products Tracked</p>
+        <strong>{{ summary.product_count }}</strong>
+      </div>
+    </article>
+    <article class="hero-card">
+      <div class="hero-icon alert"><i class="fas fa-bell"></i></div>
+      <div>
+        <p>Low Stock Alerts</p>
+        <strong>{{ summary.low_stock_count }}</strong>
+      </div>
+    </article>
+  </div>
+
+  <div class="profit-report__insights">
+    <div class="insight-card">
+      <div class="insight-card__header">
+        <div>
+          <h2>AI Profit Outlook</h2>
+          <p class="insight-meta">{{ forecast.insight }}</p>
+        </div>
+        {% if summary.ai_projection %}
+        <span class="pill pill--glow">
+          <i class="fas fa-wand-magic-sparkles"></i> {{ "{:,.2f}".format(summary.ai_projection) }}
+        </span>
+        {% endif %}
+      </div>
+      <div class="insight-meta-row">
+        <span>Trend: <strong>{{ forecast.trend_label|capitalize }}</strong></span>
+        <span>Confidence: <strong>{{ (forecast.trend_strength * 100)|round(0) }}%</strong></span>
+      </div>
+      <div id="aiSparkline" class="sparkline" data-points='{{ forecast.daily_points|tojson|safe }}'></div>
+    </div>
+    <div class="insight-card total-profit">
+      <h2>Performance Snapshot</h2>
+      <p class="total-profit__value">{{ "{:,.2f}".format(total_profit) }}</p>
+      <p class="insight-meta">Realized profit in the selected window.</p>
+    </div>
+  </div>
+
+  <div class="chart-wrapper">
+    <canvas id="profitChart" aria-label="Profit bar chart" role="img"></canvas>
+  </div>
+
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th>Quantity Sold</th>
+          <th>Unit</th>
+          <th>Cost Price</th>
+          <th>Selling Price</th>
+          <th>Profit / Unit</th>
+          <th>Total Profit</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in profit_data %}
+        <tr>
+          <td>
+            <div class="item-name">
+              <span>{{ item.name }}</span>
+              {% if item.badges %}
+              <div class="badge-row">
+                {% for badge in item.badges %}
+                  <span class="badge badge--{{ badge|lower|replace(' ', '-') }}">{{ badge }}</span>
+                {% endfor %}
+              </div>
+              {% endif %}
+            </div>
+          </td>
+          <td>{{ item.quantity }}</td>
+          <td>{{ item.unit or "-" }}</td>
+          <td>{{ "{:,.2f}".format(item.cost_price) }}</td>
+          <td>{{ "{:,.2f}".format(item.selling_price) }}</td>
+          <td>{{ "{:,.2f}".format(item.profit_per_unit) }}</td>
+          <td class="{{ 'loss' if item.total_item_profit < 0 else 'profit' }}">
+            {{ "{:,.2f}".format(item.total_item_profit) }}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7">No sales match the selected range yet.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <p class="back-link"><a href="{{ url_for('index') }}">Back to dashboard</a></p>
+</section>
+<a class="fab" href="{{ url_for('add_item') }}" aria-label="Add stock item">
+  <i class="fas fa-plus"></i>
+</a>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const labels = JSON.parse('{{ chart_labels|tojson|safe }}');
+const data = JSON.parse('{{ chart_data|tojson|safe }}');
+const ctx = document.getElementById('profitChart').getContext('2d');
+
+const colors = data.map(value => value >= 0 ? 'rgba(16, 185, 129, 0.85)' : 'rgba(239, 68, 68, 0.85)');
+const borders = data.map(value => value >= 0 ? 'rgba(5, 150, 105, 1)' : 'rgba(185, 28, 28, 1)');
+
+const yValues = data.length ? data.slice() : [0];
+yValues.push(0);
+const minValue = Math.min.apply(null, yValues);
+const maxValue = Math.max.apply(null, yValues);
+
+const dropShadowPlugin = {
+  id: 'dropShadow',
+  beforeDatasetsDraw(chart) {
+    const { ctx } = chart;
+    ctx.save();
+    ctx.shadowColor = 'rgba(15, 23, 42, 0.25)';
+    ctx.shadowBlur = 18;
+    ctx.shadowOffsetY = 8;
+  },
+  afterDatasetsDraw(chart) {
+    chart.ctx.restore();
+  }
+};
+
+const chartPalette = () => {
+  const styles = getComputedStyle(document.documentElement);
+  return {
+    grid: styles.getPropertyValue('--border-subtle') || '#e2e8f0',
+    tick: styles.getPropertyValue('--text-muted') || '#94a3b8',
+    title: styles.getPropertyValue('--text-primary') || '#0f172a'
+  };
+};
+
+const palette = chartPalette();
+const profitChart = new Chart(ctx, {
+  type: 'bar',
+  data: {
+    labels,
+    datasets: [{
+      label: 'Profit / loss',
+      data,
+      backgroundColor: colors,
+      borderColor: borders,
+      borderWidth: 1,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { intersect: false, mode: 'index' },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: (ctx) => `${ctx.parsed.y.toFixed(2)}`
+        }
+      }
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+        ticks: { color: palette.tick }
+      },
+      y: {
+        beginAtZero: true,
+        suggestedMin: minValue * 1.1,
+        suggestedMax: maxValue * 1.1,
+        grid: { color: palette.grid },
+        ticks: { color: palette.tick },
+        title: {
+          display: true,
+          text: 'Total Profit',
+          color: palette.title
+        }
+      }
+    }
+  },
+  plugins: [dropShadowPlugin]
+});
+
+const sparklineContainer = document.getElementById('aiSparkline');
+const sparklineData = sparklineContainer ? JSON.parse(sparklineContainer.dataset.points || '[]') : [];
+
+function renderSparkline(points) {
+  if (!sparklineContainer) return;
+  if (!points.length) {
+    sparklineContainer.innerHTML = '<p class="insight-meta">Not enough history yet.</p>';
+    return;
+  }
+
+  const width = sparklineContainer.clientWidth || 220;
+  const height = 70;
+  const padding = 6;
+  const values = points.map(point => point.profit);
+  const minVal = Math.min(...values);
+  const maxVal = Math.max(...values);
+  const spread = maxVal - minVal || 1;
+  const step = (width - padding * 2) / Math.max(points.length - 1, 1);
+
+  const coords = points.map((point, index) => {
+    const x = padding + index * step;
+    const normalized = (point.profit - minVal) / spread;
+    const y = height - padding - normalized * (height - padding * 2);
+    return [x, y];
+  });
+
+  const path = coords.map((pair, index) => `${index === 0 ? 'M' : 'L'}${pair[0]},${pair[1]}`).join(' ');
+  const baseline = height - padding;
+  const fillPath = `${path} L${coords.at(-1)[0]},${baseline} L${coords[0][0]},${baseline} Z`;
+
+  sparklineContainer.innerHTML = `
+    <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="sparklineGradient" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="rgba(59, 130, 246, 0.45)"></stop>
+          <stop offset="100%" stop-color="rgba(59, 130, 246, 0)"></stop>
+        </linearGradient>
+      </defs>
+      <path d="${fillPath}" fill="url(#sparklineGradient)" opacity="0.4"></path>
+      <path d="${path}" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round"></path>
+    </svg>
+  `;
+}
+
+if (sparklineContainer) {
+  renderSparkline(sparklineData);
+  window.addEventListener('resize', () => renderSparkline(sparklineData));
+}
+
+const themeToggle = document.getElementById('themeToggle');
+const themeIcon = themeToggle.querySelector('i');
+const storedTheme = localStorage.getItem('eco-theme');
+const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('eco-theme', theme);
+  themeIcon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+  themeToggle.setAttribute('aria-label', `Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`);
+  const palette = chartPalette();
+  profitChart.options.scales.x.ticks.color = palette.tick;
+  profitChart.options.scales.y.ticks.color = palette.tick;
+  profitChart.options.scales.y.grid.color = palette.grid;
+  profitChart.options.scales.y.title.color = palette.title;
+  profitChart.update('none');
+}
+
+applyTheme(storedTheme || (prefersDark ? 'dark' : 'light'));
+
+themeToggle.addEventListener('click', () => {
+  const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+  applyTheme(current === 'dark' ? 'light' : 'dark');
+});
+</script>
+
+<style>
+:root {
+  --bg: #f3f4f6;
+  --card-bg: #ffffff;
+  --card-bg-muted: #e0e7ff;
+  --text-primary: #0f172a;
+  --text-muted: #475569;
+  --border-subtle: #e2e8f0;
+  --accent: #2563eb;
+  --accent-strong: #1d4ed8;
+  --positive: #0f766e;
+  --negative: #b91c1c;
+}
+[data-theme="dark"] {
+  --bg: #0f172a;
+  --card-bg: #1e293b;
+  --card-bg-muted: #1d1b3a;
+  --text-primary: #f8fafc;
+  --text-muted: #94a3b8;
+  --border-subtle: #334155;
+  --accent: #60a5fa;
+  --accent-strong: #3b82f6;
+  --positive: #34d399;
+  --negative: #f87171;
+}
+body {
+  background: var(--bg);
+  color: var(--text-primary);
+  transition: background 0.3s ease, color 0.3s ease;
+}
+.profit-report {
+  margin: 2rem auto;
+  max-width: 1100px;
+  padding: 0 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.profit-report__title {
+  text-align: left;
+  margin: 0;
+  font-size: 2.5rem;
+  font-weight: 700;
+}
+.report-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.theme-toggle {
+  border: 1px solid var(--border-subtle);
+  background: var(--card-bg);
+  color: var(--text-primary);
+  border-radius: 999px;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.2s ease, border 0.2s ease;
+}
+.theme-toggle:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+}
+.profit-report__filters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px dashed var(--border-subtle);
+  border-radius: 12px;
+}
+.profit-report__filters label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+.profit-report__filters button,
+.link-button {
+  padding: 0.6rem 1.2rem;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  text-decoration: none;
+  cursor: pointer;
+  font-weight: 600;
+  transition: opacity 0.2s ease;
+}
+.profit-report__filters button:hover,
+.link-button:hover {
+  opacity: 0.9;
+}
+.hero-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+.hero-card {
+  background: linear-gradient(135deg, var(--card-bg), var(--card-bg-muted));
+  border-radius: 16px;
+  padding: 1rem;
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.08);
+}
+.hero-card p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+.hero-card strong {
+  font-size: 1.6rem;
+}
+.hero-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+.hero-icon.positive { background: #059669; }
+.hero-icon.neutral { background: #6b7280; }
+.hero-icon.info { background: #2563eb; }
+.hero-icon.alert { background: #d97706; }
+.profit-report__insights {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+}
+.insight-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 1rem;
+  box-shadow: 0 20px 35px rgba(15, 23, 42, 0.08);
+}
+.insight-card h2 {
+  margin-top: 0;
+}
+.insight-meta {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+.insight-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+.insight-meta-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  border-top: 1px dashed var(--border-subtle);
+  padding-top: 0.75rem;
+  margin-top: 0.75rem;
+}
+.pill {
+  border-radius: 999px;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.pill--glow {
+  background: rgba(37, 99, 235, 0.15);
+  color: var(--accent-strong);
+}
+.total-profit__value {
+  font-size: 2rem;
+  margin: 0.5rem 0 0;
+}
+.sparkline {
+  height: 80px;
+  margin-top: 1rem;
+}
+.chart-wrapper {
+  height: 360px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 1rem;
+}
+.table-wrapper {
+  overflow-x: auto;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--card-bg);
+}
+th, td {
+  padding: 0.75rem;
+  border: 1px solid var(--border-subtle);
+  text-align: center;
+}
+th {
+  background: var(--accent-strong);
+  color: #fff;
+}
+td.profit {
+  color: var(--positive);
+}
+td.loss {
+  color: var(--negative);
+}
+.item-name {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  align-items: center;
+}
+.badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.badge {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+}
+.badge--top-earner {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--positive);
+  border-color: rgba(16, 185, 129, 0.4);
+}
+.badge--biggest-loss {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--negative);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+.badge--low-stock {
+  background: rgba(234, 179, 8, 0.15);
+  color: #b45309;
+  border-color: rgba(234, 179, 8, 0.4);
+}
+.back-link {
+  text-align: center;
+  margin-top: 0.5rem;
+}
+.fab {
+  position: fixed;
+  right: 30px;
+  bottom: 30px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--accent-strong);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  box-shadow: 0 20px 30px rgba(37, 99, 235, 0.35);
+  text-decoration: none;
+  transition: transform 0.2s ease;
+}
+.fab:hover {
+  transform: translateY(-4px);
+}
+@media (max-width: 600px) {
+  .profit-report__filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .insight-meta-row {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  .report-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+}
+</style>
+{% endblock %}
+

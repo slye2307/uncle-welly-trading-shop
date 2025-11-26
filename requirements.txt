@@ -1,0 +1,5 @@
+Flask
+Flask-Cors
+stripe
+python-dotenv
+numpy
