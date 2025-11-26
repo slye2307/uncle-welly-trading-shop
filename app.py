@@ -9,18 +9,22 @@ import io
 import json
 
 from utils.stock_trends import forecast_profit_trend
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
-app.secret_key = 'your_secret_key_here'
+app.secret_key = os.getenv('SECRET_KEY', 'your_secret_key_here_change_in_production')
 
 DATABASE = 'database/stock.db'
 
 
 def get_db_connection():
+    # Ensure database directory exists
+    os.makedirs(os.path.dirname(DATABASE) if os.path.dirname(DATABASE) else '.', exist_ok=True)
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
-    return conn
-DATABASE = 'database/stock.db'  
+    return conn  
 
 
 
@@ -367,8 +371,42 @@ def export_csv():
     )
 
 
+def init_database():
+    """Initialize database tables if they don't exist"""
+    conn = get_db_connection()
+    
+    # Create stock table
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS stock (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            quantity REAL NOT NULL,
+            unit TEXT NOT NULL,
+            cost_price REAL NOT NULL,
+            selling_price REAL NOT NULL,
+            low_stock_threshold REAL
+        )
+    ''')
+    
+    # Create sales table
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS sales (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            stock_id INTEGER NOT NULL,
+            quantity_sold REAL NOT NULL,
+            sale_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (stock_id) REFERENCES stock(id)
+        )
+    ''')
+    
+    conn.commit()
+    conn.close()
+
+
 if __name__ == '__main__':
-    if not os.path.exists('database'):
-        os.makedirs('database')
+    init_database()
     app.run(debug=True)
+else:
+    # Initialize database when running with gunicorn
+    init_database()
 
